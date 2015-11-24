@@ -4,7 +4,7 @@ import createHelper from 'recompose/createHelper'
 const initAction = { type: '@@redux/INIT' }
 
 const realmRedux = (storeEnhancer, BaseComponent) => {
-  let currentReducer = BaseComponent.update
+  let currentReducer
 
   class RealmRedux extends Component {
     constructor(props) {
@@ -12,41 +12,45 @@ const realmRedux = (storeEnhancer, BaseComponent) => {
 
       this.listeners = []
 
-      this.baseStore = {
-        dispatch: action => {
-          this.props.dispatch(action)
-          this.listeners.slice().forEach(listener => listener())
-          return action
-        },
+      const createStore = reducer => {
+        currentReducer = reducer
 
-        getState: () => this.props.model,
+        this.baseStore = {
+          dispatch: action => {
+            this.props.dispatch(action)
+            this.listeners.slice().forEach(listener => listener())
+            return action
+          },
 
-        subscribe: listener => {
-          this.listeners.push(listener)
-          let isSubscribed = true
+          getState: () => this.props.model,
 
-          return function unsubscribe() {
-            if (!isSubscribed) {
-              return
+          subscribe: listener => {
+            this.listeners.push(listener)
+            let isSubscribed = true
+
+            return function unsubscribe() {
+              if (!isSubscribed) {
+                return
+              }
+
+              isSubscribed = false
+              const index = this.listeners.indexOf(listener)
+              this.listeners.splice(index, 1)
             }
+          },
 
-            isSubscribed = false
-            const index = this.listeners.indexOf(listener)
-            this.listeners.splice(index, 1)
+          replaceReducer: nextReducer => {
+            currentReducer = nextReducer
+            this.baseStore.dispatch(initAction)
           }
-        },
-
-        replaceReducer: nextReducer => {
-          currentReducer = nextReducer
-          this.baseStore.dispatch(initAction)
         }
+
+        return this.baseStore
       }
 
-      const createStore = () => this.baseStore
-
       this.store = storeEnhancer
-        ? storeEnhancer(createStore)()
-        : createStore()
+        ? storeEnhancer(createStore)(BaseComponent.update)
+        : createStore(BaseComponent.update)
     }
 
     componentWillMount() {
